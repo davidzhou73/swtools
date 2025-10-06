@@ -146,7 +146,7 @@ class SWToolsGUI:
                         for cmd_idx in range(cmd_start, len(row.columns)):
                             f.writelines(f"{row.iloc[cmd_idx]}\n")
                     f.writelines("#\n")
-                self.log_message(f"设备 {device} 脚本写入完成，结果已保存到 {file_path} ...")
+                self.log_message(f"设备 {device} 脚本写入完成，结果保存到 {file_path}")
         except Exception as e:
             self.log_message(f"错误: {str(e)}")
 
@@ -231,7 +231,7 @@ class SWToolsGUI:
                         f.write(buff)
                         f.write("\n" + "="*50 + "\n")
             ssh.close()
-            self.log_message(f"设备 {device} 脚本执行完成，结果已保存到 {file_path} ...")
+            self.log_message(f"设备 {device} 脚本执行完成，结果保存到 {file_path}")
         except Exception as e:
             self.log_message(f"错误: {str(e)}")
 
