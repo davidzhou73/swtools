@@ -53,6 +53,8 @@ class SWToolsGUI:
         self.execute_button.pack(side=tk.LEFT, padx=(0, 5))
         self.clear_button = ttk.Button(button_frame, text="清空执行结果", command=self.clear_log)
         self.clear_button.pack(side=tk.LEFT)
+        self.help_button = ttk.Button(button_frame, text="帮助", command=self.show_help)
+        self.help_button.pack(side=tk.LEFT, padx=(5, 0))
         # 使用 PanedWindow 分隔设备信息和执行结果区域，可拖动分隔条
         paned = ttk.PanedWindow(main_frame, orient=tk.VERTICAL)
         paned.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(0, 10))
@@ -116,6 +118,14 @@ class SWToolsGUI:
             messagebox.showerror("错误", f"读取设备信息失败: {str(e)}")
             self.log_message(f"错误: {str(e)}")
 
+    def get_rowlength(row):
+        len = 0
+        for idx in range(len(row)):
+            if pd.isna(row.iloc[idx]) or str(row.iloc[idx]).strip() == "":
+                break
+            len += 1
+        return len
+
     def save_commands(self):
         """生成设备命令脚本并保存到指定路径"""
         device_file = self.device_file_path.get()
@@ -143,10 +153,11 @@ class SWToolsGUI:
                     for _, row in device_df.iterrows():
                         row.columns = [str(col).strip() for col in row]
                         f.writelines("#\n")
-                        for cmd_idx in range(cmd_start, len(row.columns)):
+                        for cmd_idx in range(cmd_start, self.get_rowlength(row)):
                             f.writelines(f"{row.iloc[cmd_idx]}\n")
                     f.writelines("#\n")
                 self.log_message(f"设备 {device} 脚本写入完成，结果保存到 {file_path}")
+            self.log_message("所有设备脚本保存完成")
         except Exception as e:
             self.log_message(f"错误: {str(e)}")
 
@@ -181,9 +192,10 @@ class SWToolsGUI:
                 for _, row in device_df.iterrows():
                     row.columns = [str(col).strip() for col in row]
                     cmds = []
-                    for cmd_idx in range(4, len(row.columns)):
+                    for cmd_idx in range(4, self.get_rowlength(row)):
                         cmds.append(row.iloc[cmd_idx])
                 self.ssh_device_with_log(device, row["IP地址"], row["账号"], row["密码"], cmds)
+            self.log_message("所有设备脚本执行完成")
         except Exception as e:
             raise Exception(f"读取设备脚本配置文件失败: {str(e)}")
         finally:
@@ -196,6 +208,18 @@ class SWToolsGUI:
     def clear_log(self):
         """清空执行结果显示区域"""
         self.result_text.delete(1.0, tk.END)
+
+    def show_help(self):
+        """弹出帮助信息对话框"""
+        help_text = (
+            "使用说明：\n"
+            "1. 选择设备脚本配置Excel文件（见范例和README）。\n"
+            "2. 点击‘生成脚本并保存’可批量生成设备命令脚本。\n"
+            "3. 点击‘生成脚本并执行’可批量远程执行设备命令并保存回显结果。\n"
+            "4. 执行结果和日志会显示在下方区域。\n"
+            "5. 如遇问题请检查Excel文件格式或联系开发者davidzhou73@163.com。"
+        )
+        messagebox.showinfo("帮助", help_text)
 
     def log_message(self, message):
         """在执行结果区域追加日志信息，带时间戳"""
@@ -214,21 +238,23 @@ class SWToolsGUI:
         try:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self.log_message(f"正在连接 {ip} ...")
+            self.log_message(f"正在SSH登录 {ip} ...")
             ssh.connect(ip, 22, user, passwd, timeout=10)
             channel = ssh.invoke_shell()
-            file_path = pathlib.Path(self.save_path.get()).joinpath(f"{device}_result.log")
+            file_path = pathlib.Path(self.save_path.get()).joinpath(f"{device}_result.txt")
             with open(file_path, 'w', encoding='utf-8') as f:
                 for cmd in cmds:
                     cmd = cmd.strip()
                     if cmd:
                         channel.send(cmd + '\n')
-                        time.sleep(5)
+                        time.sleep(2)
                         output = channel.recv(65535)
                         buff = output.decode('utf-8', errors='ignore')
-                        # 写入文件
-                        f.write("="*15 + f"命令: {cmd}" + "="*15 + "\n")
-                        f.write(buff)
+                        # 删除多余空行，然后写入文件
+                        buff = buff.replace('\r\n', '\n').replace('\n\n', '\n')
+                        lines = buff.splitlines()
+                        for line in lines:
+                            f.write(line.rstrip('\n') + '\n')
                         f.write("\n" + "="*50 + "\n")
             ssh.close()
             self.log_message(f"设备 {device} 脚本执行完成，结果保存到 {file_path}")
